@@ -44,7 +44,7 @@ MetallicPaint (already), MoltenMetal, LiquidChrome, LiquidEther, Iridescence, Pr
 BlurText, SplitText, ScrollReveal, ScrollFloat, GradientText, ShinyText, CountUp, TextType, TrueFocus  
 **Avoid:** GlitchText, DecryptedText, ScrambledText, FuzzyText, ASCIIText — they read as hacker SaaS, not capital-grade.
 
-### If the job is a **card or tile** (research, steps, about)
+### If the job is **a card or tile** (research, steps, about)
 SpotlightCard, TiltedCard, PixelCard, BounceCards, Stack, ProfileCard, ReflectiveCard, DecayCard  
 Resting state must stay **visible** (no opacity-0 until hover).
 
