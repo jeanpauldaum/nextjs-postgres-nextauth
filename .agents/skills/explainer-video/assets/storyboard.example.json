@@ -1,0 +1,17 @@
+{
+  "title": "Text first, views second",
+  "brief": "brief.md",
+  "scene": "scene.py",
+  "scene_class": "Explainer",
+  "out": "video.mp4",
+  "voice": { "provider": "auto", "speechify": "geffen_32", "kokoro": "af_heart", "speed": 1.0 },
+  "lead_in": 0.4,
+  "gap": 0.35,
+  "tail": 1.5,
+  "beats": [
+    { "id": "text", "say": "Every explainer starts as text. The text is the source of truth." },
+    { "id": "views", "say": "From the text, you can make a sheet, a page, or a video. Each one is a view." },
+    { "id": "check", "say": "Before you share a view, compare each label and number with the text." },
+    { "id": "fix", "say": "If a fact is wrong, change the text first. Then make the view again." }
+  ]
+}
