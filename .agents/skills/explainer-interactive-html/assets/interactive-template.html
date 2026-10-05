@@ -1,0 +1,261 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How a view stays true to its text</title>
+<style>
+  /* Tokens: replace with the project's brand tokens (see AGENTS.md). */
+  :root {
+    --porcelain: #F7F8FB;
+    --ink: #12141A;
+    --brand: #4F6CF7;
+    --brand-text: #3B54D6;
+    --brand-tint: #EEF1FE;
+    --fail: #C2412D;
+    --paper: #FFFFFF;
+    --muted: #5B5F6B;
+    --line: rgba(18, 20, 26, 0.55);
+    --hair: rgba(18, 20, 26, 0.14);
+    --sans: "Inter", "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "JetBrains Mono", "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--porcelain); color: var(--ink); }
+  body { font: 15px/1.55 var(--sans); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 1200px; margin: 0 auto; padding: 40px 32px 28px; min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; gap: 28px; }
+
+  header h1 { font: 650 28px/1.15 var(--sans); letter-spacing: -0.02em; margin: 0 0 6px; }
+  header p { margin: 0; color: var(--muted); max-width: 62ch; }
+
+  .stage { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 28px; align-items: start; }
+  @media (max-width: 860px) { .stage { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--paper); border: 1px solid var(--line); }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); font: 600 13px/1 var(--sans); }
+  .panel-head .tag { margin-left: auto; font: 400 11px/1 var(--mono); color: var(--muted); }
+
+  ol.steps { list-style: none; margin: 0; padding: 6px 0; counter-reset: step; }
+  ol.steps button {
+    all: unset; box-sizing: border-box; width: 100%; cursor: pointer;
+    display: grid; grid-template-columns: 26px 1fr; gap: 10px; padding: 9px 14px; align-items: center;
+    color: var(--muted); font: 500 14px/1.3 var(--sans);
+  }
+  ol.steps button .n { width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--hair); font: 600 11px/1 var(--mono); }
+  ol.steps button[aria-current="step"] { color: var(--ink); background: var(--brand-tint); }
+  ol.steps button[aria-current="step"] .n { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+  ol.steps button:hover { color: var(--ink); }
+  :focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+
+  .detail { padding: 16px 14px 14px; border-top: 1px solid var(--line); }
+  .detail h2 { font: 650 17px/1.25 var(--sans); margin: 0 0 6px; }
+  .detail p { margin: 0 0 12px; }
+  .nav { display: flex; gap: 8px; align-items: center; }
+  .nav button {
+    font: 600 13px/1 var(--sans); padding: 9px 14px; cursor: pointer;
+    border: 1px solid var(--ink); background: var(--paper); color: var(--ink);
+  }
+  .nav button.primary { background: var(--ink); color: var(--paper); }
+  .nav button:disabled { opacity: 0.35; cursor: default; }
+  .nav .count { margin-left: auto; font: 400 12px/1 var(--mono); color: var(--muted); }
+
+  .control { display: flex; gap: 0; padding: 12px 14px; border-bottom: 1px solid var(--line); align-items: center; }
+  .control .label { font: 500 12px/1 var(--sans); color: var(--muted); margin-right: 12px; }
+  .seg button {
+    font: 500 13px/1 var(--sans); padding: 8px 12px; cursor: pointer;
+    border: 1px solid var(--line); background: var(--paper); color: var(--ink); margin-left: -1px;
+  }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); position: relative; }
+
+  svg.diagram { width: 100%; height: auto; display: block; }
+  .node rect { fill: var(--paper); stroke: var(--hair); stroke-width: 1; transition: fill .35s var(--ease), stroke .35s var(--ease); }
+  .node .t { font: 600 14px var(--sans); fill: var(--muted); transition: fill .35s var(--ease); }
+  .node .s { font: 400 11.5px var(--mono); fill: var(--muted); }
+  .node.on rect { fill: var(--brand-tint); stroke: var(--brand); stroke-width: 1.5; }
+  .node.on .t { fill: var(--ink); }
+  .edge { fill: none; stroke: var(--hair); stroke-width: 1.25; transition: stroke .35s var(--ease); }
+  .edge.on { stroke: var(--brand); stroke-width: 2; }
+  .edge.back { stroke-dasharray: 5 4; }
+  .elbl { font: 400 11px var(--mono); fill: var(--muted); }
+  .elbl.on { fill: var(--brand-text); }
+
+  footer { display: flex; gap: 16px; flex-wrap: wrap; font: 400 12px/1.4 var(--mono); color: var(--muted); border-top: 1px solid var(--hair); padding-top: 12px; }
+  footer kbd { font: inherit; border: 1px solid var(--hair); padding: 1px 5px; background: var(--paper); }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<div class="page">
+  <header>
+    <h1>How a view stays true to its text</h1>
+    <p>Step through the loop. The text brief holds every fact. The view is a throwaway rendering that you check before you hand it over.</p>
+  </header>
+
+  <main class="stage">
+    <section class="panel" aria-label="Steps">
+      <div class="panel-head">Steps <span class="tag">&larr; &rarr; to move</span></div>
+      <ol class="steps" id="steps"></ol>
+      <div class="detail" aria-live="polite">
+        <h2 id="step-title"></h2>
+        <p id="step-body"></p>
+        <div class="nav">
+          <button id="prev" type="button">Back</button>
+          <button id="next" type="button" class="primary">Next</button>
+          <span class="count" id="count"></span>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="Diagram">
+      <div class="control">
+        <span class="label" id="fmt-label">View format</span>
+        <div class="seg" role="group" aria-labelledby="fmt-label" id="formats"></div>
+      </div>
+      <svg class="diagram" id="diagram" viewBox="0 0 720 320" role="img"></svg>
+    </section>
+  </main>
+
+  <!-- Step content. Each fact must come from the brief. data-on lists the active node ids. -->
+  <div id="step-content" hidden>
+    <article data-on="brief"><h2>Write the brief</h2><p>Write the facts in plain text first. This file is the source of truth.</p></article>
+    <article data-on="brief lint"><h2>Lint the brief</h2><p>Run the lint script. Fix long sentences, passive voice, and vague words.</p></article>
+    <article data-on="lint view"><h2>Make one view</h2><p>Build the view from the brief. Use the format that fits the shape of the idea.</p></article>
+    <article data-on="view check"><h2>Check the view</h2><p>Render the view. Look at it. Compare each label and number with the brief.</p></article>
+    <article data-on="check brief"><h2>Fix in the brief</h2><p>If a fact is wrong, change the brief. Then make the view again.</p></article>
+    <article data-on="check hand"><h2>Hand over both</h2><p>Give the reader the view and the brief. The view names the brief path.</p></article>
+  </div>
+
+  <footer>
+    <span>Source of truth: brief.md</span>
+    <span>Generated view. Check it against the brief.</span>
+    <span data-lint="skip"><kbd>&larr;</kbd> <kbd>&rarr;</kbd> step &middot; <kbd>1</kbd>-<kbd>3</kbd> format</span>
+  </footer>
+</div>
+
+<script>
+// Diagram data. Every label must come from the brief. Step text lives in #step-content.
+const FORMATS = {
+  sheet: { label: "Sheet", view: "sheet.html", check: "PNG review" },
+  page:  { label: "Page",  view: "page.html",  check: "step screenshots" },
+  video: { label: "Video", view: "video.mp4",  check: "frame sheet" },
+};
+const NODES = [
+  { id: "brief",  x: 30,  y: 40,  label: "Brief",     sub: () => "brief.md" },
+  { id: "lint",   x: 270, y: 40,  label: "Lint",      sub: () => "ste_lint.py" },
+  { id: "view",   x: 510, y: 40,  label: "View",      sub: f => FORMATS[f].view },
+  { id: "check",  x: 510, y: 230, label: "Check",     sub: f => FORMATS[f].check },
+  { id: "hand",   x: 270, y: 230, label: "Hand over", sub: () => "view + brief" },
+];
+const EDGES = [
+  { from: "brief", to: "lint" },
+  { from: "lint",  to: "view" },
+  { from: "view",  to: "check" },
+  { from: "check", to: "hand" },
+  { from: "check", to: "brief", back: true, label: "fix the brief" },
+];
+// Rendering. Usually no edits are needed below this line.
+const STEPS = [...document.querySelectorAll("#step-content article")].map(a => ({
+  title: a.querySelector("h2").textContent,
+  body: a.querySelector("p").textContent,
+  on: a.dataset.on.split(/\s+/),
+}));
+const W = 180, H = 64, SVG_NS = "http://www.w3.org/2000/svg";
+const state = { step: 0, format: "sheet" };
+const $ = id => document.getElementById(id);
+const el = (tag, attrs = {}, text) => {
+  const n = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, v);
+  if (text != null) n.textContent = text;
+  return n;
+};
+const center = n => ({ x: n.x + W / 2, y: n.y + H / 2 });
+const byId = Object.fromEntries(NODES.map(n => [n.id, n]));
+
+function edgePath(e) {
+  const a = byId[e.from], b = byId[e.to];
+  if (e.back) return `M${a.x + 30},${a.y} V${b.y + H + 70} H${b.x + W / 2} V${b.y + H + 6}`;
+  const ca = center(a), cb = center(b);
+  if (Math.abs(ca.y - cb.y) < 1) return `M${ca.x < cb.x ? a.x + W : a.x},${ca.y} H${ca.x < cb.x ? b.x - 6 : b.x + W + 6}`;
+  return `M${ca.x},${ca.y < cb.y ? a.y + H : a.y} V${ca.y < cb.y ? b.y - 6 : b.y + H + 6}`;
+}
+
+function drawDiagram() {
+  const svg = $("diagram");
+  svg.replaceChildren();
+  const defs = el("defs");
+  for (const [id, color] of [["arrow", "rgba(18,20,26,.35)"], ["arrow-on", "#4F6CF7"]]) {
+    const m = el("marker", { id, viewBox: "0 0 8 8", refX: 7, refY: 4, markerWidth: 7, markerHeight: 7, orient: "auto-start-reverse" });
+    m.append(el("path", { d: "M0,0 L8,4 L0,8 z", fill: color }));
+    defs.append(m);
+  }
+  svg.append(defs);
+  const on = new Set(STEPS[state.step].on);
+  for (const e of EDGES) {
+    const active = on.has(e.from) && on.has(e.to);
+    svg.append(el("path", { d: edgePath(e), class: `edge${e.back ? " back" : ""}${active ? " on" : ""}`, "marker-end": `url(#${active ? "arrow-on" : "arrow"})` }));
+    if (e.label) {
+      const b = byId[e.to];
+      svg.append(el("text", { x: b.x + W / 2 + 12, y: b.y + H + 64, class: `elbl${active ? " on" : ""}` }, e.label));
+    }
+  }
+  for (const n of NODES) {
+    const g = el("g", { class: `node${on.has(n.id) ? " on" : ""}`, transform: `translate(${n.x},${n.y})` });
+    g.append(el("rect", { width: W, height: H }));
+    g.append(el("text", { x: 16, y: 27, class: "t" }, n.label));
+    g.append(el("text", { x: 16, y: 47, class: "s" }, n.sub(state.format)));
+    svg.append(g);
+  }
+  svg.setAttribute("aria-label", `Diagram, step ${state.step + 1}: ${STEPS[state.step].title}. Active: ${[...on].join(", ")}.`);
+}
+
+function render() {
+  const s = STEPS[state.step];
+  $("step-title").textContent = s.title;
+  $("step-body").textContent = s.body;
+  $("count").textContent = `Step ${state.step + 1} of ${STEPS.length}`;
+  $("prev").disabled = state.step === 0;
+  $("next").disabled = state.step === STEPS.length - 1;
+  document.querySelectorAll("#steps button").forEach((b, i) =>
+    i === state.step ? b.setAttribute("aria-current", "step") : b.removeAttribute("aria-current"));
+  document.querySelectorAll("#formats button").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.format === state.format)));
+  drawDiagram();
+  history.replaceState(null, "", `#step-${state.step + 1}${state.format === "sheet" ? "" : "-" + state.format}`);
+}
+
+function go(i) { state.step = Math.max(0, Math.min(STEPS.length - 1, i)); render(); }
+
+STEPS.forEach((s, i) => {
+  const li = document.createElement("li");
+  const b = document.createElement("button");
+  b.type = "button";
+  b.innerHTML = `<span class="n">${i + 1}</span><span></span>`;
+  b.lastChild.textContent = s.title;
+  b.addEventListener("click", () => go(i));
+  li.append(b);
+  $("steps").append(li);
+});
+Object.entries(FORMATS).forEach(([key, f]) => {
+  const b = document.createElement("button");
+  b.type = "button"; b.dataset.format = key; b.textContent = f.label;
+  b.addEventListener("click", () => { state.format = key; render(); });
+  $("formats").append(b);
+});
+$("prev").addEventListener("click", () => go(state.step - 1));
+$("next").addEventListener("click", () => go(state.step + 1));
+document.addEventListener("keydown", e => {
+  if (e.target.closest("input, textarea")) return;
+  if (e.key === "ArrowRight") go(state.step + 1);
+  if (e.key === "ArrowLeft") go(state.step - 1);
+  const keys = Object.keys(FORMATS), k = Number(e.key);
+  if (k >= 1 && k <= keys.length) { state.format = keys[k - 1]; render(); }
+});
+
+const m = location.hash.match(/^#step-(\d+)(?:-(\w+))?$/);
+if (m) { state.step = Math.max(0, Math.min(STEPS.length - 1, Number(m[1]) - 1)); if (FORMATS[m[2]]) state.format = m[2]; }
+render();
+</script>
+</body>
+</html>
